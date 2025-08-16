@@ -2,32 +2,26 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const connectDB = require('../auth-service/config/db')
 
-const fileRoutes = require('./routes/files');
+const fileRoutes = require('./routes/file');
 
 const app = express();
 
 // Basic logging
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   console.log(`${new Date().toISOString()} ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// Allow cross-origin requests
+// CORS
 app.use(cors());
 
-// For any JSON endpoints we may add later
+// Keep JSON parser for any JSON endpoints
 app.use(express.json());
-
-// DB Connection
-connectDB();
-
-// Mount file routes
 app.use('/', fileRoutes);
 
-// Error handler to catch payload-too-large from body parser
-app.use((err, req, res, next) => {
+// Global error handler (handles payload-too-large, etc.)
+app.use((err, _req, res, _next) => {
   if (err && err.type === 'entity.too.large') {
     return res.status(413).json({ error: 'File too large. Max 50MB' });
   }
@@ -35,10 +29,21 @@ app.use((err, req, res, next) => {
   return res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server
 const PORT = process.env.PORT || 3001;
-if (!process.env.MONGO_URI) {
-  console.error('MONGO_URI missing in .env');
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+  console.error('❌ MONGO_URI missing in .env');
   process.exit(1);
 }
 
+// Connect DB, THEN start server
+mongoose.set('strictQuery', true);
+mongoose.connect(MONGO_URI)
+  .then(() => {
+    console.log('✅ MongoDB connected (file-service)');
+    app.listen(PORT, () => console.log(`🚀 File Service running on port ${PORT}`));
+  })
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err);
+    process.exit(1);
+  });

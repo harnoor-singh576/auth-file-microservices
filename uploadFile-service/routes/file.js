@@ -25,23 +25,24 @@ const generateS3Key = (userId, originalFilename) => {
   return `${userId}/${Date.now()}-${random}-${safeName}`;
 };
 
-// Upload Route
+// Upload (raw, max 50MB)
 router.post(
   '/upload',
   auth,
   express.raw({ limit: '50mb', type: '*/*' }),
   async (req, res) => {
     try {
-        console.log(req.body)
-      const filename = (req.query.filename || req.headers['x-filename'] || '').trim();
-      if (!filename) return res.status(400).json({ error: 'Missing filename' });
+      const filename = (req.query.filename || req.headers['x-filename'] || '').toString().trim();
+      if (!filename) return res.status(400).json({ error: 'Missing filename. Use ?filename= or X-Filename.' });
 
-      if (!req.body || !Buffer.isBuffer(req.body))
-        return res.status(400).json({ error: 'No file body found' });
+      if (!req.body || !Buffer.isBuffer(req.body)) {
+        return res.status(400).json({ error: 'No file body found. Send raw binary.' });
+      }
 
       const size = req.body.length;
-      const MAX_BYTES = 50 * 1024 * 1024;
-      if (size > MAX_BYTES) return res.status(413).json({ error: 'File too large. Max 50MB.' });
+      if (size > 50 * 1024 * 1024) {
+        return res.status(413).json({ error: 'File too large. Max 50MB.' });
+      }
 
       const userId = req.user.userId || req.user.id || req.user._id;
       const s3Key = generateS3Key(userId, filename);
@@ -60,8 +61,18 @@ router.post(
           return res.status(500).json({ error: 'Failed to upload to S3' });
         }
 
-        const fileDoc = await File.create({ filename: path.basename(filename), size, userId, s3Key });
-        return res.status(201).json({ message: 'File uploaded', fileId: fileDoc._id, s3Key });
+        const fileDoc = await File.create({
+          filename: path.basename(filename), 
+          size,
+          userId: String(userId),
+          s3Key
+        });
+
+        return res.status(201).json({
+          message: 'File uploaded',
+          fileId: fileDoc._id,
+          s3Key
+        });
       });
     } catch (error) {
       console.error('Upload error:', error);
@@ -70,15 +81,16 @@ router.post(
   }
 );
 
-// Get File URL Route
+// Presigned download
 router.get('/file/:id', auth, async (req, res) => {
   try {
     const file = await File.findById(req.params.id).lean();
     if (!file) return res.status(404).json({ error: 'File not found' });
 
     const userId = req.user.userId || req.user.id || req.user._id;
-    if (String(file.userId) !== String(userId))
+    if (String(file.userId) !== String(userId)) {
       return res.status(403).json({ error: 'Forbidden: you do not own this file' });
+    }
 
     const signedUrl = s3.getSignedUrl('getObject', {
       Bucket: AWS_BUCKET_NAME,
