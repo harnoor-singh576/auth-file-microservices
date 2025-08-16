@@ -36,47 +36,94 @@ Currently, the system has **two microservices**:
 ### 1. Clone the repo
 ```bash
 git clone https://github.com/harnoor-singh576/auth-file-microservices.git
-
+```
 ### 2. Setup MongoDB Atlas
+```bash
 Create a free MongoDB Atlas cluster
 Whitelist your IP in MongoDB Atlas security settings
 Create a database user with password
 Copy the connection URI and replace <MONGO_URI> in .env
+```
 
 ### 3. Setup AWS S3
+```bash
 Create an S3 Bucket
 Create an IAM User with access policies:
 s3:PutObject
 s3:GetObject
 Get Access Key ID and Secret Key
 Note your AWS region
+```
 
 ### 4. Configure .env Files
+```bash
 Refer auth-service/.env.example file
 Refer uploadFile-service/.env.example file
+```
 
 ### 5. Install Dependencies
+```bash
 cd auth-service && npm install
 cd ../uploadFile-service && npm install
+```
 
 ### 6. Start services
+```bash
 # Terminal 1
 cd auth-service && npm run dev
 
 # Terminal 2
 cd file-service && npm run dev
-
+```
 
 ## 📡 API Endpoints
-## 🔑 Auth Service
+### 🔑 Auth Service
+```bash
 
 POST /register   -> Register new user
 POST /login      -> Login user, returns JWT token
 GET  /me         -> Get logged-in user details (requires JWT)
+```
 
-## 📁 File Service
+
+### 📁 File Service
+```bash
 POST /upload?filename=<name>   -> Upload file (binary), requires JWT
 GET  /file/:id                 -> Get presigned S3 download URL
+```
 
+
+##🧪 curl Usage
+### 1. Register User
+```bash
+curl -X POST http://localhost:3000/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"secret123"}'
+```
+
+### 2. Login & Save Token
+```bash
+TOKEN=$(curl -s -X POST http://localhost:3000/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"secret123"}' | jq -r .token)
+
+```
+
+### 3. Upload File
+```bash
+curl -X POST "http://localhost:3001/upload?filename=test.pdf" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary "@test.pdf"
+
+
+```
+
+### 4. Get Presigned Download URL
+```bash
+curl -X GET "http://localhost:3001/file/<fileId>" \
+  -H "Authorization: Bearer $TOKEN"
+
+```
 
 
